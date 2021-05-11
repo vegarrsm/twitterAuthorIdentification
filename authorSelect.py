@@ -13,71 +13,59 @@ access_token_secret = 'vsJR8uQh9tDEio4qvxD6rHDWoeF94FjZw2FgI2JlZw4jb'
 auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
 auth.set_access_token(access_token, access_token_secret)
 
-api = tweepy.API(auth)
-ans = "y"
-dataSize = 10 #Amount of tweets to fetch (this includes testing tweets, so add 10% compared to desired training set size)
-outputFileName = "10TweetResults.csv"
+api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
+dataSize = 1000 #Amount of tweets to fetch (this includes testing tweets, so add 10% compared to desired training set size)
 results = []
-inputList = [["@BarackObama", "@katyperry","@justinbieber"], ["@rihanna", "@taylorswift13","@Cristiano"], ["@ladygaga","@realDonaldTrump","@TheEllenShow"], ["@ArianaGrande", "@YouTube", "@KimKardashian"], ["@jtimberlake", "@selenagomez", "@Twitter"], ["@narendramodi", "@cnnbrk", "@britneyspears"],["@ddlovato", "@shakira", "@jimmyfallon"], ["@BillGates", "@CNN", "@neymarjr"]]
+#Default list set to biggest accounts on twitter
+inputList = ["@BarackObama","@katyperry","@justinbieber","@rihanna","@BillGates", "@CNN", "@neymarjr", "@ArianaGrande", "@YouTube", "@KimKardashian", "@britneyspears","@ddlovato", "@shakira","@Cristiano"]#,"@jtimberlake", "@selenagomez","@narendramodi", "@cnnbrk"
 ##Code for inputing twitter users to console. Decided to use prepared list for experiment
-# user = "s"
-# while user != "":#Add validation of screen name
-#     user = input("\ninput twitter screen name of user (remember '@'): ")
-#     if user != "":
-#         users.append(user)
-#     print("leave empty when finished")
+#if input("Do you want to add custom list of twitter handles? input y for custom list or n for premade")=="y":
+if False:
+    dataSize = input("How many tweets should be fetched per user? ")
+    inputList = []
+    user = "temp"
+    while user != "":
+        user = input("\ninput twitter screen name of user (remember '@'): ")
+        if user != "":
+            inputList.append(user)
+        print("leave empty when finished")
 
-for users in inputList:
-    start_time = time.time()
+if(input("Refetch data? ") == "y"):
+    ID = 0
+    out_file_train = open("authors.tsv","wt", encoding="utf-8")
+    BERTTrain = csv.writer(out_file_train, delimiter='\t')
+    out_file_test = open("testInputFile.tsv","wt", encoding="utf-8")
+    BERTTest = csv.writer(out_file_test, delimiter='\t')
 
-    f = open("authors.txt","w", encoding="utf-8")
-    t = open("testInputFile.txt", "w", encoding="utf-8")
-    f.write("".join(users))
     p = re.compile(".*(?=http)")
-    for user in users:
+    for user in inputList:
         amount = 0
-        f.write("\n\nseparation---NEW USER---separation\n" + user + "\n\n")
-        t.write("\n\nseparation---NEW USER---separation\n" + user + "\n\n")
         for status in tweepy.Cursor(api.user_timeline, screen_name=user, tweet_mode="extended", count = 200).items(): #Bruk api.user_timeline(...) istedet for å få count og full_text til å funke?
             m = p.match(status.full_text)
-            if m and m.group()[:2] != "RT":
+            #Filters out retweets
+            if m and m.group()[:2] != "RT" and m.group() != "":
                 if amount <= dataSize - dataSize//10:
-                    f.write(m.group() + "\n\n")
+                    #Creating tsv training data
+                    BERTTrain.writerow([ID, user, "a", m.group()])
                 else:
-                    t.write(m.group() + "\n\n")
+                    #Creating tsv test/validation data
+                    BERTTest.writerow([ID,user,"a", m.group()])
                 if amount >= dataSize:
                     break
                 amount += 1
-        f.write("\n\nseparation---NEW USER---separation")
-        t.write("\n\nseparation---NEW USER---separation")
+                ID += 1
         print("Amount for " + user[1:] + ": ", amount)
-    f.close()
-    t.close()
-    print("--- %s seconds ---" % (time.time() - start_time),"\n")
-
-    
-    testRes = []
-    i = -1
-    for user in users:
-        t = open("testInputFile.txt", "r+", encoding="utf-8")
-        text = re.sub(r"separation---NEW USER---separation\n@testUser", "separation---NEW USER---separation\n" +users[i], t.read()) if i >= 0 else t.read()
-        text = re.sub(r"separation---NEW USER---separation\n" + user, "separation---NEW USER---separation\n@testUser" ,text)
-        t.seek(0)
-        t.truncate()
-        t.write(text)
-        t.close()
-        scriptRes = script.main()
-        print("result for: " + user, scriptRes)
-        testRes += scriptRes + [1 if user[1:] == scriptRes[0] else 0]
-        i += 1
-    t.close()
-    results.append(testRes)
-
-print("\n\n")
+    out_file_train.close()
+    out_file_test.close()
 
 
-f = open(outputFileName, 'w')
-with f:
-    writer = csv.writer(f)
-    for row in results:
-        writer.writerow(row)
+i = -1
+for user in inputList:
+    scriptRes = script.main(user)
+    results.append(1 if scriptRes[0] == user[1:] else 0)
+    print("result for: " + user, scriptRes[0] == user[1:])
+    print("time: ", scriptRes[-1])
+    i += 1
+
+print(results)
+print("Average result: ", sum(results)/len(results))
