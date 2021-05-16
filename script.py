@@ -3,6 +3,9 @@ from Author import Author
 import time
 from math import log, exp
 import pandas as pd
+from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.naive_bayes import  GaussianNB
+import seaborn
 
 arguments = sys.argv
 
@@ -26,10 +29,11 @@ def performNaiveBayes(authors, testAuthor):
                 print("Something is slightly wrong")
                 total = log(0.01)
         author.setPosterior((prior + conditional)-total)
+    return authors
 
 
 # Used for printing the final results of the naive bayes
-def results(authors, start_time):
+def results(authors):
     sortedA = sorted(authors, key=lambda author: author.getPosterior(), reverse=True)
     summed = sum(a.getPosterior() for a in sortedA)
     retList = []
@@ -37,13 +41,10 @@ def results(authors, start_time):
         author.setPosterior(author.getPosterior()/summed)
         retList.append(author.getID())
         retList.append(author.getPosterior())
-    retList.append(time.time() - start_time)
     return retList
 
 # Entry of the script
-def main(validationAuthor):
-    #testInput = input("Input testdata\n")
-    start_time = time.time()
+def main():
     try:
         f = pd.read_csv("authors.tsv", delimiter='\t', header=None, names=['ID', 'author', 'NA', 'sentence'])
     except Exception as error:
@@ -56,28 +57,48 @@ def main(validationAuthor):
     # Sets prior probability for each author
     for author in authors:
         author.setPrior(1.00/len(authors))
-    # Creates a testAuthor instance of Author class just for the ease of further processing
-    testAuthor = Author(validationAuthor[1:], "testInputFile.tsv")
-    performNaiveBayes(authors, testAuthor)
-    return results(authors, start_time)
+    return authors
+
 
 #added for quicker testing of script.py, by not having to run authorSelect
 if __name__ == "__main__":
+    #Training cpu
+    trainTime = time.time()
+    authors = main()
+    trainTime = time.time() - trainTime
+    
+    #Validation
     try:
-        f = pd.read_csv("authors.tsv", delimiter='\t', header=None, names=['ID', 'author', 'NA', 'sentence'])
+        t = pd.read_csv("testInputFile.tsv", delimiter='\t', header=None, names=['ID', 'author', 'NA', 'sentence'])
     except Exception as error:
         print(error)
         sys.exit()
 
-    authors = list(set([x["author"] for index, x in f.iterrows()]))
-    res = []
-    for author in authors:
-        i = 0
-        scriptRes = main(author)
-        res.append(1 if scriptRes[0] == author[1:] else 0)
-        print("result for: " + author, scriptRes[0] == author[1:])
-        print("time: ", scriptRes[-1])
-        i += 1
+    authorNums = {}
+    for i in range(len(authors)):
+        authorNums[authors[i].getID()] = i 
 
-    print(res)
-    print("Average result: ", sum(res)/len(res))
+    resSingleTweet = []
+    trueList = []
+    validationTime = time.time()
+    for index, X in t.iterrows():
+        testAuthor = Author(X["author"], "testInputFile.tsv", index)
+        resSingleTweet.append([X["author"],results(performNaiveBayes(authors, testAuthor))])
+        trueList.append(authorNums.get(X["author"][1:]))
+    validationTime = time.time() - validationTime
+    
+    
+    pred = []
+    correct = []  
+        
+    for X in resSingleTweet:
+        pred.append(1 if X[0][1:] == X[1][0] else 0)
+
+    confusion = confusion_matrix(trueList, pred, [i for i in range(len(authors))])
+    
+    print("Average result single tweet: ", sum(pred)/len(pred))
+    print("Validation time of all tweets: ", validationTime)
+    print("Training time of all tweets: ", trainTime)
+
+    labels = [auth[1] for auth in authorNums]
+    seaborn.heatmap(confusion, annot=True, yticklabels = labels, xticklabels = labels)

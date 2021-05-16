@@ -2,7 +2,7 @@ import tweepy
 import re
 import time
 import os
-import script
+#import script
 import csv
 
 consumer_key = '2GGedBFBD4t323sjt76bWwUoy'
@@ -17,10 +17,9 @@ api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
 dataSize = 1000 #Amount of tweets to fetch (this includes testing tweets, so add 10% compared to desired training set size)
 results = []
 #Default list set to biggest accounts on twitter
-inputList = ["@BarackObama","@katyperry","@justinbieber","@rihanna","@BillGates", "@CNN", "@neymarjr", "@ArianaGrande", "@YouTube", "@KimKardashian", "@britneyspears","@ddlovato", "@shakira","@Cristiano"]#,"@jtimberlake", "@selenagomez","@narendramodi", "@cnnbrk"
+inputList = ["@BarackObama","@katyperry","@justinbieber","@rihanna","@BillGates", "@CNN", "@neymarjr", "@ArianaGrande", "@YouTube", "@KimKardashian", "@britneyspears","@ddlovato", "@shakira","@Cristiano"]
 ##Code for inputing twitter users to console. Decided to use prepared list for experiment
-#if input("Do you want to add custom list of twitter handles? input y for custom list or n for premade")=="y":
-if False:
+if input("Do you want to add custom list of twitter handles? input y for custom list or n for premade")=="y":
     dataSize = input("How many tweets should be fetched per user? ")
     inputList = []
     user = "temp"
@@ -30,42 +29,30 @@ if False:
             inputList.append(user)
         print("leave empty when finished")
 
-if(input("Refetch data? ") == "y"):
-    ID = 0
-    out_file_train = open("authors.tsv","wt", encoding="utf-8")
-    BERTTrain = csv.writer(out_file_train, delimiter='\t')
-    out_file_test = open("testInputFile.tsv","wt", encoding="utf-8")
-    BERTTest = csv.writer(out_file_test, delimiter='\t')
 
-    p = re.compile(".*(?=http)")
-    for user in inputList:
-        amount = 0
-        for status in tweepy.Cursor(api.user_timeline, screen_name=user, tweet_mode="extended", count = 200).items(): #Bruk api.user_timeline(...) istedet for å få count og full_text til å funke?
-            m = p.match(status.full_text)
-            #Filters out retweets
-            if m and m.group()[:2] != "RT" and m.group() != "":
-                if amount <= dataSize - dataSize//10:
-                    #Creating tsv training data
-                    BERTTrain.writerow([ID, user, "a", m.group()])
-                else:
-                    #Creating tsv test/validation data
-                    BERTTest.writerow([ID,user,"a", m.group()])
-                if amount >= dataSize:
-                    break
-                amount += 1
-                ID += 1
-        print("Amount for " + user[1:] + ": ", amount)
-    out_file_train.close()
-    out_file_test.close()
+ID = 0
+out_file_train = open("authors.tsv","wt", encoding="utf-8")
+BERTTrain = csv.writer(out_file_train, delimiter='\t')
+out_file_test = open("testInputFile.tsv","wt", encoding="utf-8")
+BERTTest = csv.writer(out_file_test, delimiter='\t')
 
-
-i = -1
+p = re.compile(".*(?=http)")
 for user in inputList:
-    scriptRes = script.main(user)
-    results.append(1 if scriptRes[0] == user[1:] else 0)
-    print("result for: " + user, scriptRes[0] == user[1:])
-    print("time: ", scriptRes[-1])
-    i += 1
-
-print(results)
-print("Average result: ", sum(results)/len(results))
+    amount = 0
+    for status in tweepy.Cursor(api.user_timeline, screen_name=user, tweet_mode="extended", count = 200).items(): #Bruk api.user_timeline(...) istedet for å få count og full_text til å funke?
+        m = p.match(status.full_text)
+        #Filters out retweets
+        if m and m.group()[:2] != "RT" and m.group() != "":
+            if amount <= dataSize - dataSize//10:
+                #Creating tsv training data
+                BERTTrain.writerow([ID, user, "a", m.group()])
+            else:
+                #Creating tsv test/validation data
+                BERTTest.writerow([ID,user,"a", m.group()])
+            if amount >= dataSize:
+                break
+            amount += 1
+            ID += 1
+    print("Amount for " + user[1:] + ": ", amount)
+out_file_train.close()
+out_file_test.close()

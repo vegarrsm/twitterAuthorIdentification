@@ -1,25 +1,26 @@
 import re
 from collections import Counter
+from math import log, exp
 import pandas as pd
 
 class Author:
 
-    # Constructor of the Author class
-    #		authorID = could be name or an ID that uniquely identifies the author
-    #		filePaths = the list of strings where each string is the filePath to the texts(can be multiple)
-    #					written by this specific author. This enables us to train the algorithm in more than
-    # 					one text for each author which makes it more diverse
-
-    def __init__(self, authorID="", filePath=""):
+    #authorID is twitter handle of author (without @)
+    #singleTweetID defines whether Author is used in training, on multiple tweets or in 
+    #validation on single tweet
+    def __init__(self, authorID="", filePath="", singleTweetID = ""):
         self.__authorID = authorID
-        self.__wordFrequency = None							# List of tuples after processing, keeps count of all the words and its frequency
-        self.__wordProbability = {}							# This is a dictionary. value is frequency/total words used
-        # __wordsInText will contain all the words in all the text used for training the algorithm
-        self.__wordsInText = []								# List of all the words from all the text that the training was performed on
-        self.__prior = None									# Prior Probability of this Author
-        self.__posterior = None								# Posterior Probability of this Author
+        self.__wordFrequency = None	#Keeps count of all the words used and their frequency
+        self.__wordProbability = {} #Dictionary in the form: {word: (times used)/(total words)}
+        self.__tweetLengths = []    #List of length of each tweet
+        self.__wordLength = 0       #Average word length for this author
+        self.__wordsInText = []	    #All words used in all text that was trained on
+        self.__prior = None			#Prior Probability of this Author
+        self.__posterior = None		#Posterior Probability of this Author
         self.__filePath = filePath
+        self.__singleTweetID = singleTweetID
         self.processFiles()
+        
 
     def getID(self):
         return self.__authorID
@@ -39,36 +40,45 @@ class Author:
     def getPosterior(self):
         return self.__posterior
 
-    # Returns conditional probability such as P(word1|author), for this Author
-    # If the author has never used the word argument, returns a very small number (heuristic)
+    def getWordLength(self):
+        return self.__wordLength
+
+    def getTweetLength(self):
+        #print("TWEETLENGTH",len(self.__tweetLengths))
+        return sum(self.__tweetLengths)/len(self.__tweetLengths) if len(self.__tweetLengths) != 0 else 1
+
+    # Returns conditional probability P(word1|author)
     def getConditional(self, word):
-        result = None
+        res = None
         try:
-            result = self.__wordProbability[word]
+            res = self.__wordProbability[word]
         except:
-            result = 0.00000000001 # Sets extremely low value if word has never been used
-        return result
+            res = 0.00000000001 # Sets extremely low value if author has never used the word
+        return res
 
 
     def processFiles(self):
-        #p = re.compile("(?<=separation---NEW USER---separation\n)@"+self.__authorID+"[\s\S]*?(?=separation---NEW USER---separation)")
-        #f = open(self.__filePath, "r", encoding="utf-8")
-        # Reads the entire file as one string, converts to lowercase, replaces \n with a space
-        #text = p.search(f.read()).group().lower().replace("\n", " ")
-        #f.close()
         f = pd.read_csv(self.__filePath, delimiter='\t', header=None, names=['ID', 'author', 'NA', 'sentence'])
         text = ""
-        for index,row in f.iterrows():
-            if row["author"][1:] == self.__authorID:
-                text += row["sentence"] + " "
+        #Originally implemented it to guess based on all tweets, but quickly realized 
+        #i needed more attempts to get useful data
+        if self.__singleTweetID == "":    
+            for index,row in f.iterrows():
+                if row["author"][1:] == self.__authorID:
+                    self.__tweetLengths.append(len(row["sentence"]))
+                    text += row["sentence"] + " "
+        else:
+            for index,row in f.iterrows():
+                if self.__singleTweetID == index:
+                    self.__tweetLengths.append(len(row["sentence"]))
+                    text += row["sentence"] + " "
         ## Creates a wordlist from the tweets and appends it to  wordLists
         words = re.sub("[^\w]", " ", text).split()
         self.__wordsInText += words
-        # print("\n\n AUTHOR: " + self.__authorID)
-        # print(self.__wordsInText[0:50])
         self.__wordFrequency = Counter(self.__wordsInText).most_common()
-
-        ## wordProbability[word] is essentially wordFrequency[word]/wordFrequency.sum(), where wordfrequency is how many times a word
-        ## shows up in the dataset
+        #print("WORDSLENGTH: ", len(words))
+        self.__wordLength = sum(self.__tweetLengths)/len(words) if len(words)!=0 else 1
+        ## wordProbability[word] is essentially wordFrequency[word]/wordFrequency.sum(), 
+        ## where wordfrequency is how many times a word shows up in the dataset
         for tuple in self.__wordFrequency:
             self.__wordProbability.update({tuple[0]:float(tuple[1])/len(self.__wordsInText)})
