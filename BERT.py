@@ -22,17 +22,17 @@ gpu = True if torch.cuda.is_available() else False
 device = torch.device("cuda" if gpu else "cpu")
 
 if gpu:
-      n_gpu = torch.cuda.device_count()
+  n_gpu = torch.cuda.device_count()
   torch.cuda.get_device_name(0)
 
 # verify GPU availability
 if gpu:
-      device_name = tf.test.gpu_device_name()
+  device_name = tf.test.gpu_device_name()
   if device_name != '/device:GPU:0':
-        raise SystemError('GPU device not found')
+    raise SystemError('GPU device not found')
   print('Found GPU at: {}'.format(device_name))
 
-  import time
+import time
 
 # Converting dataset to tokens that work with BERT
 dfTrain = pd.read_csv("authors.tsv", delimiter='\t', header=None, names=['sentence_source', 'label', 'label_notes', 'sentence'])
@@ -44,8 +44,8 @@ authorNums = {}
 num = 0
 
 for x in dfTest.label.values:
-      if x not in authorNums.keys():
-        authorNums[x] = num
+  if x not in authorNums.keys():
+    authorNums[x] = num
     num+=1
 
 
@@ -54,7 +54,7 @@ MAX_LEN = 128
 
 # Add tokens on start and end of sentence for BERT
 def tokenize(df):
-      # Create sentence and label lists
+  # Create sentence and label lists
   sentences = df.sentence.values
   labels = [authorNums.get(x) for x in df.label.values]
   sentences = ["[CLS] " + sentence + " [SEP]" for sentence in sentences]
@@ -71,7 +71,7 @@ trainInputs,testInputs, trainLabels, testLabels = train_test_split(inputs[0], in
 # Create attention masks
 attentionMasks = []
 for seq in inputs[0]:
-      seq_mask = [float(i>0) for i in seq]
+  seq_mask = [float(i>0) for i in seq]
   attentionMasks.append(seq_mask) 
 trainAttentionMasks = []
 testAttentionMasks = []
@@ -136,7 +136,7 @@ trainTime = time.time()
 epochTimes = []
 # trange is a tqdm wrapper around the normal python range
 for _ in trange(epochs, desc="Epoch"):
-      
+  
   epochTime = time.time()
   
   # Training
@@ -148,7 +148,7 @@ for _ in trange(epochs, desc="Epoch"):
   
   # Train the data for one epoch
   for step, batch in enumerate(trainDataloader):
-        # Add batch to GPU
+    # Add batch to GPU
     batch = tuple(t.to(device) for t in batch)
     # Unpack the inputs from dataloader
     dataInputIds, dataInputMasks, dataLabels = batch
@@ -184,7 +184,7 @@ for _ in trange(epochs, desc="Epoch"):
 
   # Evaluate data for one epoch
   for batch in testDataloader:
-        # Add batch to GPU
+    # Add batch to GPU
     batch = tuple(t.to(device) for t in batch)
     # Unpack the inputs from our dataloader
     dataInputIds, dataInputMasks, dataLabels = batch
@@ -195,20 +195,19 @@ for _ in trange(epochs, desc="Epoch"):
     
     # Move logits and labels to CPU
     logits = logits.detach().cpu().numpy()
-    label_ids = dataLabels.to('cpu').numpy()
+    labelIds = dataLabels.to('cpu').numpy()
 
-    tmp_eval_accuracy = flat_accuracy(logits, label_ids)
+    tmp_eval_accuracy = flat_accuracy(logits, labelIds)
     eval_accuracy += tmp_eval_accuracy
     nb_eval_steps += 1
 
   validationTime = time.time() - validationTime
   epochTimes.append(time.time()-epochTime)
-  print("\nvalidation time: ",validationTime,"\nvalidation time: ", trainTime)
+  print("\nvalidation time: ",validationTime,"\ntraining time: ", trainTime)
   print("Validation Accuracy: {}".format(eval_accuracy/nb_eval_steps))
 
 trainTime = time.time() - trainTime
 print("setupTime: --- %s seconds ---" % setupTime, "\ntrainTime: --- %s seconds ---" %trainTime, "\nepochTimes: --- ",epochTimes," seconds ---\n")
-
 
 df = pd.read_csv("testInputFile.tsv", delimiter='\t', header=None, names=['sentence_source', 'label', 'label_notes', 'sentence'])
 
@@ -220,51 +219,55 @@ sentences = df.sentence.values
 sentences = ["[CLS] " + sentence + " [SEP]" for sentence in sentences]
 labels = df.label.values
 
-tokenized_texts = [tokenizer.tokenize(sent) for sent in sentences]
+tokenizedTexts = [tokenizer.tokenize(sent) for sent in sentences]
 
 MAX_LEN = 128
 
-# Use the BERT tokenizer to convert the tokens to their index numbers in the BERT vocabulary
-input_ids = [tokenizer.convert_tokens_to_ids(x) for x in tokenized_texts]
-# Pad our input tokens
-input_ids = pad_sequences(input_ids, maxlen=MAX_LEN, dtype="long", truncating="post", padding="post")
+# COnvert tokens to BERT vocabulary
+inputIdsTraining = [tokenizer.convert_tokens_to_ids(x) for x in tokenizedTexts]
+# Pad input tokens
+inputIdsTraining = pad_sequences(inputIdsTraining, maxlen=MAX_LEN, dtype="long", truncating="post", padding="post")
 # Create attention masks
-attention_masks = []
+attentionMasks = []
 
 # Create a mask of 1s for each token followed by 0s for padding
-for seq in input_ids:
-      seq_mask = [float(i>0) for i in seq]
-  attention_masks.append(seq_mask) 
+for seq in inputIdsTraining:
+  seq_mask = [float(i>0) for i in seq]
+  attentionMasks.append(seq_mask) 
 
 
-prediction_inputs = torch.tensor(input_ids)
-prediction_masks = torch.tensor(attention_masks)
-prediction_labels = torch.tensor([authorNums.get(x) for x in labels])
+predictionInputs = torch.tensor(inputIdsTraining)
+predictionMasks = torch.tensor(attentionMasks)
+predictionLabels = torch.tensor([authorNums.get(x) for x in labels])
 
-#redundant?  
+ 
 batchSize = 16
 
 
-prediction_data = TensorDataset(prediction_inputs, prediction_masks, prediction_labels)
-prediction_sampler = SequentialSampler(prediction_data)
-prediction_dataloader = DataLoader(prediction_data, sampler=prediction_sampler, batch_size=batchSize)
+predictionData = TensorDataset(predictionInputs, predictionMasks, predictionLabels)
+predictionSampler = SequentialSampler(predictionData)
+predictionDataLoader = DataLoader(predictionData, sampler=predictionSampler, batch_size=batchSize)
 
 # Prediction on test set
 
 # Evaluation during training
 model.eval()
+# for x in inputIdsTraining:
+#   for y in x:
+#     if not y.dtype == "int64":
+#       print(y.dtype)
 
 # Tracking variables 
 predictions , true_labels = [], []
 # Predict 
-for batch in prediction_dataloader:
-      # Add batch to GPU
+for batch in predictionDataLoader:
+  # Add batch to GPU
   batch = tuple(t.to(device) for t in batch)
   # Unpack the inputs from our dataloader
   dataInputIds, dataInputMask, dataLabels = batch
   with torch.no_grad():
     # Forward pass, calculate logit predictions
-    logits = model(inputIdsTraining, token_type_ids=None, attention_mask=dataInputMask)
+    logits = model(dataInputIds, token_type_ids=None, attention_mask=dataInputMask)
 
   # Move logits and labels to CPU
   logits = logits.detach().cpu().numpy()
@@ -275,10 +278,11 @@ for batch in prediction_dataloader:
   true_labels.append(label_ids)
 validationTime = time.time() - validationTime
 
-
+  # Import and evaluate each test batch using Matthew's correlation coefficient
+from sklearn.metrics import confusion_matrix
 cm = []
 for i in range(len(true_labels)):
-      cm.append(np.argmax(predictions[i], axis=1).flatten())
+  cm.append(np.argmax(predictions[i], axis=1).flatten())
 print(true_labels, len(authorNums.keys()))
 print(cm)
 
